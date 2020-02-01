@@ -1,0 +1,26 @@
+form.form {
+    display: flex;
+    flex-direction: column;
+
+    input {
+        display: block;
+        width: 100%;
+        font-size: 18px;
+        line-height: 24px;
+        text-overflow: ellipsis;
+        color: $textDark;
+        padding: 14px;
+        border: 2px solid #ebeced;
+        margin-bottom: 30px;
+        appearance: none;
+    }
+    
+    select {
+        margin-bottom: 30px;
+    }
+
+    button[type="submit"] {
+        appearance: none;
+        -webkit-appearance: none;
+    }
+}

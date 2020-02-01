@@ -1,88 +1,127 @@
 import React from 'react'
-import Head from 'next/head'
-import Nav from '../components/nav'
+import Layout from '../components/Layout'
+import fetch from 'isomorphic-unfetch'
+import cheerio from 'cheerio';
+import '../sass/main.scss';
 
-const Home = () => (
-  <div>
-    <Head>
-      <title>Home</title>
-      <link rel="icon" href="/favicon.ico" />
-    </Head>
+function formatPrice(price) {
+    console.log(price);
+    return price.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1,");
+}
 
-    <Nav />
+function checkGoodAveragePrice(queryPrice, averagePrice) {
+    return parseFloat(queryPrice) < parseFloat(averagePrice);
+}
 
-    <div className="hero">
-      <h1 className="title">Welcome to Next.js!</h1>
-      <p className="description">
-        To get started, edit <code>pages/index.js</code> and save to reload.
-      </p>
+function calculateAveragePrice(properties) {
 
-      <div className="row">
-        <a href="https://nextjs.org/docs" className="card">
-          <h3>Documentation &rarr;</h3>
-          <p>Learn more about Next.js in the documentation.</p>
-        </a>
-        <a href="https://nextjs.org/learn" className="card">
-          <h3>Next.js Learn &rarr;</h3>
-          <p>Learn about Next.js by following an interactive tutorial!</p>
-        </a>
-        <a
-          href="https://github.com/zeit/next.js/tree/master/examples"
-          className="card"
-        >
-          <h3>Examples &rarr;</h3>
-          <p>Find other example boilerplates on the Next.js GitHub.</p>
-        </a>
-      </div>
-    </div>
+    let numberOfProperties = properties.length;
+    let totalPropertiesPrice = 0;
 
-    <style jsx>{`
-      .hero {
-        width: 100%;
-        color: #333;
-      }
-      .title {
-        margin: 0;
-        width: 100%;
-        padding-top: 80px;
-        line-height: 1.15;
-        font-size: 48px;
-      }
-      .title,
-      .description {
-        text-align: center;
-      }
-      .row {
-        max-width: 880px;
-        margin: 80px auto 40px;
-        display: flex;
-        flex-direction: row;
-        justify-content: space-around;
-      }
-      .card {
-        padding: 18px 18px 24px;
-        width: 220px;
-        text-align: left;
-        text-decoration: none;
-        color: #434343;
-        border: 1px solid #9b9b9b;
-      }
-      .card:hover {
-        border-color: #067df7;
-      }
-      .card h3 {
-        margin: 0;
-        color: #067df7;
-        font-size: 18px;
-      }
-      .card p {
-        margin: 0;
-        padding: 12px 0 0;
-        font-size: 13px;
-        color: #333;
-      }
-    `}</style>
-  </div>
-)
+    properties.forEach(property => totalPropertiesPrice += property.price);
+    
+    let averagePropertyPrice = totalPropertiesPrice / numberOfProperties;
+    let roundedAveragePropertyPrice = averagePropertyPrice.toFixed(2);
+
+    return roundedAveragePropertyPrice;
+}
+
+function getProperties(html) {
+
+    const $ = cheerio.load(html);
+
+    const propertiesList = $('.listing-results li.srp:not(.premium-listing)');
+
+    // maybe map properties to an object with needed variables e.g. price, bedrooms, etc...
+    // e.g. 
+    let properties = propertiesList.map(function() {
+
+        let priceText = $(this).find('.listing-results-price').text();
+        let cleanPrice = priceText.replace(/\s/g, "");;
+        let priceNumber = cleanPrice.replace(/\D/g,'');
+
+        return {
+            price: parseInt(priceNumber)
+        }
+    });
+
+    let filteredProperties = Array.from(properties).filter(property => !isNaN(property.price));
+
+    return filteredProperties;
+}
+
+const Home = ({data, postcode, price, bedrooms, type}) => {
+    
+    const properties = getProperties(data);
+    const averagePropertyPrice = calculateAveragePrice(properties);
+    const formattedAveragePropertyPrice = formatPrice(averagePropertyPrice);
+    const formattedPrice = price ? formatPrice(price) : '';
+    const goodAveragePrice = checkGoodAveragePrice(price, averagePropertyPrice);
+
+    return (
+        <Layout>
+            <section className="app">
+                <div className="container">
+                    <div className="row justify-content-center">
+                        <div className="col-lg-12">
+                            <div className="app__container">
+                                <div className="app__header">
+                                    <h1>Average Property Price Calculator</h1>
+                                </div>
+                                <div className="app__body">
+                                    <div className="app__form">
+                                        <form className="form" action="/">
+                                            <input className="js-postcode" type="text" name="postcode" placeholder="Postcode" defaultValue={postcode} required></input>
+                                            <input className="js-price" type="text" name="price" placeholder="Price" defaultValue={price} required></input>
+                                            <input className="js-bedrooms" type="text" name="bedrooms" placeholder="No. of Bedrooms" defaultValue={bedrooms} required></input>
+                                            <select className="js-house-type" name="type" defaultValue={type} required>
+                                                <option value="terraced">Terraced</option>
+                                                <option value="semi_detached">Semi-detached house</option>
+                                                <option value="detached">Detached house</option>
+                                            </select>
+                                            <button className="button" type="submit">Calculate</button>
+                                        </form>
+                                    </div>
+                                    {properties.length !== 0 &&
+                                        <div className="app__result">
+                                            <p>The average price for a {bedrooms} bedroom, {type} house in {postcode} is</p>
+                                            <p className={"result " + (goodAveragePrice === true ? 'green' : 'red')}><span>£{formattedAveragePropertyPrice}</span></p>
+                                            <p>which is {goodAveragePrice === true ? 'less than' : 'more than'} your price of £{formattedPrice}</p>
+                                            <p className="note">Calculated from {properties.length} similar properties.</p>
+                                        </div> 
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </Layout>
+    )
+};
+
+Home.getInitialProps = async function({query}) {
+
+    // console.log(query);
+
+    const { postcode, price, bedrooms, type} = query;
+
+    // check if query is empty or not
+    // if not empty:
+
+
+
+    const res = await fetch(`https://www.zoopla.co.uk/for-sale/houses/${bedrooms}-bedrooms/${postcode}/?page_size=100&property_sub_type=${type}&q=${postcode}&radius=0&results_sort=newest_listings&search_source=facets`);
+    const data = await res.text();
+
+    return { data, postcode, price, bedrooms, type };
+}
+
+// inputs:
+// - post code
+// - price
+// - bedrooms
+// - house type (e.g. detached)
+
 
 export default Home
